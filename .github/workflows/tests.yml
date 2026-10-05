@@ -14,7 +14,9 @@ jobs:
           python-version: "3.12"
       - name: Abhängigkeiten installieren
         run: python -m pip install -r requirements.txt
-      - name: Tests
+      - name: Tests (ohne Netz)
         run: python -m pytest -q
-      - name: Kompletter Lauf
-        run: python run.py --out /tmp/results
+      - name: Komplette Läufe
+        run: |
+          python run.py --out /tmp/results
+          python run_extended.py --out /tmp/results

@@ -1,6 +1,5 @@
 """Lastgang-Bereinigung: Sprung finden und korrigieren, Lücken füllen, nichts verschweigen."""
 import numpy as np
-import pandas as pd
 
 from twin.data_quality import clean_load, make_dirty_load
 

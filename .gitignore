@@ -6,3 +6,6 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Laufzeitdaten der Plattform
+data/

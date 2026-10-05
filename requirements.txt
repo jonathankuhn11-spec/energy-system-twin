@@ -3,4 +3,8 @@ numpy==2.4.4
 scipy==1.17.1
 pandas==2.3.3
 matplotlib==3.10.8
+duckdb==1.5.6
+httpx==0.28.1
+fastapi==0.142.2
+uvicorn==0.54.0
 pytest==9.1.1

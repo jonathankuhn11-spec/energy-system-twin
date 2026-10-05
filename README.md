@@ -10,7 +10,8 @@ Datenqualitätsmodul, das einen RLM-Lastgang vor der Kalibrierung bereinigt: Lü
 per Change-Point-Erkennung korrigieren.
 
 **Stack:** Python, SciPy (HiGHS), NumPy, pandas, Matplotlib · Web-Demo in HTML/JavaScript mit Chart.js ·
-**Status:** Modell, Optimierung, Datenqualität und Demo stehen; Plattform-Variante (Ingestion, Datenbank, API, Scheduler) folgt
+Plattform mit FastAPI, DuckDB, Docker, Energy-Charts und Open-Meteo ·
+**Status:** Modell, Optimierung, Kalibrierung, Prognoseunsicherheit, Datenqualität, Demo und Plattform-Variante stehen
 
 ## Ergebnis
 
@@ -38,7 +39,105 @@ Dann sähe die Batterie nach 125 k€/a aus, obwohl 106 k€ davon das Kühlhaus
 ![Fahrplan](results/fahrplan.png)
 
 Alle Zahlen erzeugt `run.py` in rund 20 Sekunden; Rohwerte in [`results/report.json`](results/report.json),
-Fahrplan in [`results/fahrplan.csv`](results/fahrplan.csv).
+Fahrplan in [`results/fahrplan.csv`](results/fahrplan.csv). Die Erweiterungen unten rechnet `run_extended.py`
+nach [`results/erweiterung.json`](results/erweiterung.json).
+
+## Vom Modell zum Betrieb
+
+Die Wochenrechnung oben nimmt vier Dinge an, die im Betrieb nicht gelten: stündliche Auflösung, eine Woche als
+Horizont, bekannte Modellparameter und bekannte Preise. Jede dieser Annahmen ist einzeln aufgelöst.
+
+**Auflösung und Horizont.** Das LP arbeitet mit beliebiger Schrittweite und Länge. Viertelstündlich wird die
+Spitze auf der Basis bewertet, auf der sie der Netzbetreiber abrechnet; der Monatshorizont preist die
+Monatsspitze statt der Wochenspitze. Die Aussage bleibt stabil:
+
+| Horizont | Schritte | Lastspitze Status quo → optimiert | Einsparung p. a. |
+| --- | --- | --- | --- |
+| Woche, stündlich | 168 | 1.879 → 1.355 kW | 106 k€ |
+| Woche, viertelstündlich | 672 | 1.845 → 1.368 kW | 104 k€ |
+| Monat (30 Tage), stündlich | 720 | 1.923 → 1.372 kW | 110 k€ |
+
+**Kalibrierung aus Messdaten.** `twin/calibrate.py` schätzt die fünf Parameter des Kühlhaus-Modells
+(thermische Kapazität, Mehr-Wärmeeintrag, Grundlast, Außentemperatur-Anteil, Schichtzuschlag) aus
+Kühlhaustemperatur, Kälteleistung, Außentemperatur und Schichtstatus. Die Regression läuft auf der integrierten
+Dynamik, nicht auf Temperaturdifferenzen, weil Sensorrauschen sonst durch die Schrittweite geteilt wird und die
+Kapazität systematisch unterschätzt. Auf einer simulierten Messwoche mit 0,1 K Temperatur- und 2 % Leistungsrauschen:
+
+| Parameter | wahr | geschätzt | Abweichung |
+| --- | --- | --- | --- |
+| Thermische Kapazität | 1.500 kWh/K | 1.536 kWh/K | +2,4 % |
+| Mehr-Wärmeeintrag | 35 kW/K | 31,7 kW/K | −9,3 % |
+| Grundlast Kältebedarf | 1.450 kW | 1.444 kW | −0,4 % |
+| Außentemperatur-Anteil | 45 kW/K | 44,3 kW/K | −1,5 % |
+| Schichtzuschlag | 420 kW | 431 kW | +2,6 % |
+
+Die Nachsimulation mit den geschätzten Parametern trifft die gemessene Temperatur auf 0,11 K. Voraussetzung ist,
+dass sich die Temperatur im Datensatz bewegt: Aus einer Thermostatwoche bei konstant 4 °C lässt sich die
+Kapazität nicht identifizieren, das meldet die Funktion statt eines Zufallswerts.
+
+**Unsicherheit und rollierende Optimierung.** `twin/rolling.py` optimiert wie im Betrieb: jeden Tag ein
+48-Stunden-Fenster gegen die Preisprognose, nur der erste Tag wird umgesetzt, der erreichte Zustand wandert ins
+nächste Fenster. Bewertet wird der umgesetzte Fahrplan mit den wahren Preisen:
+
+| Variante | Prognosefehler | Lastspitze | Kosten p. a. | Einsparung p. a. |
+| --- | --- | --- | --- | --- |
+| Status quo | – | 1.879 kW | 2.218 k€ | – |
+| Woche, perfekte Voraussicht | – | 1.355 kW | 2.112 k€ | 106 k€ |
+| MPC 48 h, perfekte Preisprognose | 0 €/MWh | 1.378 kW | 2.120 k€ | 99 k€ |
+| MPC 48 h, Persistenz (Vortagspreis) | 10,7 €/MWh | 1.378 kW | 2.115 k€ | 103 k€ |
+| MPC 48 h, Prognosefehler σ = 15 €/MWh | 13,9 €/MWh | 1.378 kW | 2.122 k€ | 96 k€ |
+| MPC 48 h, Prognosefehler σ = 30 €/MWh | 27,8 €/MWh | 1.378 kW | 2.133 k€ | 85 k€ |
+
+Zwei Befunde: Das Fenster kostet unter 1 % gegenüber der Wochenlösung, und die Einsparung ist robust gegen
+Prognosefehler. Selbst eine schlechte Prognose (RMSE 28 €/MWh) lässt 85 der 106 k€ stehen, weil der Großteil aus
+dem Leistungspreis kommt, der von der Lastspitze und nicht vom Preisverlauf abhängt. Dass die Persistenzprognose
+knapp besser abschneidet als die perfekte, liegt an der Fensteroptimierung selbst: Bei Prognosefehlern um
+10 €/MWh entscheidet nicht die Prognose, sondern wo das Fenster endet.
+
+## Plattform-Variante
+
+`backend/` macht aus dem Modell einen Dienst mit echten Daten, ohne Registrierung bei irgendeinem Anbieter:
+
+```mermaid
+flowchart LR
+    EC["Energy-Charts<br/>Day-Ahead DE-LU"] --> I["Ingestion<br/>backend/ingest.py"]
+    OM["Open-Meteo<br/>Temperatur, Strahlung"] --> I
+    I --> DB[("DuckDB<br/>prices, weather, runs, schedules")]
+    S["Scheduler 13:30<br/>backend/scheduler.py"] --> C["Zyklus<br/>48-h-Fenster, Startzustand aus letztem Lauf"]
+    DB --> C --> DB
+    API["FastAPI<br/>/health /prices /weather /ingest /run /schedule"] --> DB
+    API --> C
+```
+
+| Baustein | Was er tut |
+| --- | --- |
+| `ingest.py` | Day-Ahead-Preise (Energy-Charts, Fraunhofer ISE, CC BY 4.0) und Wetter (Open-Meteo) abrufen; Parser getrennt vom HTTP-Aufruf, kommen mit 15-Minuten-Produkten und Zeitzonen zurecht |
+| `store.py` | DuckDB-Zeitreihenspeicher: eine Datei, kein Server, idempotente Upserts |
+| `service.py` | 48-h-Fenster ab der nächsten vollen Stunde: PV aus Globalstrahlung, Prozess und Kältebedarf aus dem Standortprofil, fehlende Preise per Persistenz, Startzustand aus dem letzten Lauf |
+| `api.py` | REST-API, siehe Tabelle unten |
+| `scheduler.py` | täglicher Lauf um 13:30 Uhr, wenn die Preise des Folgetags vorliegen; läuft als Thread im API-Prozess, weil DuckDB einen Schreiber hat |
+| `Dockerfile`, `docker-compose.yml` | ein Container, Datenbank im Volume `./data` |
+
+| Endpunkt | Antwort |
+| --- | --- |
+| `GET /health` | Status, Datenabdeckung, letzter Lauf, Attribution |
+| `POST /ingest` | Preise und Wetter abrufen und speichern (502 bei Netzfehler) |
+| `POST /run` | Optimierungszyklus ausführen: Lauf-ID, Spitze, Arbeitskosten, aufgefüllte Preisschritte (409 ohne Daten) |
+| `GET /schedule` | Fahrplan des letzten Laufs: Preis, PV, Prozess, Kälte, Batterie, Temperatur, Netz je Stunde |
+| `GET /prices`, `GET /weather` | Rohdaten aus dem Speicher |
+
+Lokal ohne Docker:
+
+```powershell
+python -m pip install -r requirements.txt
+uvicorn backend.api:app --port 8000
+```
+
+Dann `POST http://localhost:8000/ingest`, `POST /run`, `GET /schedule`; interaktive Dokumentation unter
+`http://localhost:8000/docs`. Mit Docker: `docker compose up --build`, dann läuft zusätzlich der Scheduler.
+
+Die Plattform-Tests laufen ohne Netz gegen aufgezeichnete Antwortstrukturen beider APIs
+(`tests/fixtures/`), die Live-Abrufe prüft man mit `POST /ingest`.
 
 ## Live-Demo
 
@@ -114,44 +213,58 @@ macOS und Linux: statt der vierten Zeile `source .venv/bin/activate`.
 | Normalwoche | `python run.py` |
 | Dunkelflaute | `python run.py --scenario dunkelflaute --out results/dunkelflaute` |
 | Andere Batteriegröße für Szenario C | `python run.py --battery 1500` |
+| Erweiterungen (Auflösung, Kalibrierung, Unsicherheit) | `python run_extended.py` |
+| Plattform starten | `uvicorn backend.api:app --port 8000` |
 | Tests | `python -m pytest -q` |
 | Web-Demo lokal | `docs/index.html` im Browser öffnen |
 
-Die 17 Tests prüfen die Physik des Modells (Energiebilanz in jeder Stunde, Temperaturband, zyklische Batterie,
-Anlagengrenzen), die Ökonomie (Vorkühlung senkt Spitze und Kosten, Batterie bringt wenig dazu) und die
-Datenbereinigung (Sprung an der richtigen Stelle, Faktor auf 1 % genau, Lücken gefüllt, Abweichung unter 0,5 %).
+Die 33 Tests prüfen die Physik des Modells (Energiebilanz in jedem Schritt, Temperaturband, zyklische Batterie,
+Anlagengrenzen, Fensterbetrieb mit Start- und Endzustand), die Ökonomie (Vorkühlung senkt Spitze und Kosten,
+Batterie bringt wenig dazu, Prognosefehler kosten in der richtigen Reihenfolge), die Kalibrierung (Parameter
+auf wenige Prozent, Nicht-Identifizierbarkeit wird erkannt), die Datenbereinigung (Sprung an der richtigen
+Stelle, Faktor auf 1 % genau, Lücken gefüllt, Abweichung unter 0,5 %) und die Plattform (Parser, Speicher,
+Zyklus mit Zustandsübergabe, API Ende-zu-Ende).
 
 ## Projektstruktur
 
 ```
 twin/
-  site.py            Standortparameter, synthetische Zeitreihen (Spot, PV, Prozesslast, Kältebedarf)
-  optimize.py        Status quo und LP-Einsatzoptimierung
+  site.py            Standortparameter, Profile, synthetische Zeitreihen in beliebiger Auflösung und Länge
+  optimize.py        Status quo, LP-Einsatzoptimierung (zyklisch oder Fenster), Fahrplan-Nachrechnung
+  calibrate.py       Modellparameter aus Messdaten (Integralmethode) mit Validierung
+  forecast.py        Preisprognosen: Persistenz, verrauscht
+  rolling.py         Rollierende 48-h-Optimierung mit Zustandsübergabe, Bewertung mit wahren Preisen
   data_quality.py    Lastgang-Bereinigung: Change-Point-Erkennung, Niveaukorrektur, Lücken
+backend/             Ingestion, DuckDB-Speicher, Zyklus, FastAPI, Scheduler, Dockerfile
 run.py               Szenarien, Batterie-Dimensionierung, Report, Fahrplan, Abbildung
+run_extended.py      Auflösung und Horizont, Kalibrierung, Unsicherheit
 docs/index.html      Web-Demo (GitHub Pages)
-tests/               17 Tests
-results/             Report, Fahrplan und Abbildung der Normalwoche; Dunkelflaute in results/dunkelflaute/
+tests/               33 Tests, Plattform-Tests gegen aufgezeichnete API-Strukturen in tests/fixtures/
+results/             Report, Fahrplan, Abbildung, Erweiterungen; Dunkelflaute in results/dunkelflaute/
 ```
 
 ## Grenzen
 
-- **Stündlich statt viertelstündlich.** Der Leistungspreis fällt real auf die höchste Viertelstunde des Jahres;
-  hier steht die Wochenspitze stellvertretend.
-- **Perfekte Voraussicht.** Preise, PV und Lasten der Woche sind bekannt. Ein Betrieb bräuchte Prognosen und
-  eine rollierende Optimierung.
+- **Jahresspitze.** Der Leistungspreis fällt real auf die höchste Viertelstunde des Jahres; hier steht die
+  Wochen- oder Monatsspitze stellvertretend. Ein Jahreshorizont ist mit dem LP möglich, braucht aber Jahresdaten.
+- **Prognosen sind Platzhalter.** Persistenz und verrauschte wahre Preise zeigen die Sensitivität; eine echte
+  Preisprognose (Wetter, Last, Marktdaten) ist nicht enthalten. PV- und Lastprognosen gelten im MPC als bekannt.
+- **Prozessdaten synthetisch.** Die Plattform leitet PV aus der Strahlung ab, Prozesslast und Kältebedarf aber
+  aus dem Standortprofil, bis Sub-Metering angebunden ist.
 - **Konstanter COP.** Real hängt die Leistungszahl von Außen- und Verdampfungstemperatur ab.
 - **Einknotenmodell.** Das Kühlhaus hat eine Temperatur; Schichtung, Türöffnungen und Kühlgutwechsel fehlen.
 - **Bis an den Bandrand.** Der Optimierer nutzt 2 und 6 °C voll aus; im Betrieb bliebe eine Sicherheitsmarge.
-- **Synthetische Daten.** Standort, Lastgang und Fehler sind erfunden, in plausiblen Größenordnungen.
+- **Synthetische Daten.** Standort, Lastgang und Fehler sind erfunden, in plausiblen Größenordnungen; echt sind
+  in der Plattform nur Preise und Wetter.
+- **Ein Schreiber.** DuckDB ist für einen Standort und einen Prozess gedacht. Mehrere Standorte oder parallele
+  Schreiber bräuchten PostgreSQL/TimescaleDB; die Speicherschicht ist dafür in `backend/store.py` gekapselt.
 
 ## Nächste Schritte
 
-1. Plattform-Variante: Ingestion echter Day-Ahead-Preise und Wetterdaten, Zeitreihen-Datenbank, REST-API,
-   Scheduler mit rollierender Optimierung über 48 Stunden
-2. Viertelstündliche Auflösung und Monats-Peak statt Wochen-Peak
-3. Kalibrierung des Kühlhaus-Modells aus Messdaten per Regression
-4. Unsicherheit: Optimierung gegen Preisprognosen statt gegen bekannte Preise
+1. Sub-Metering anbinden und das Kühlhaus-Modell aus echten Messdaten kalibrieren
+2. Preisprognose aus Wetter- und Marktdaten statt Persistenz
+3. Mindestlaufzeiten und Schaltverluste der Kälteanlage als gemischt-ganzzahliges Programm
+4. Flex-Vermarktung (Intraday, Regelenergie) als zusätzliche Erlösquelle im Batterie-Business-Case
 
 ## Lizenz
 

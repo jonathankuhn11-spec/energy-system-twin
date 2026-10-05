@@ -1,0 +1,95 @@
+{
+  "aufloesung_horizont": [
+    {
+      "horizont": "Woche, stündlich",
+      "schritte": 168,
+      "lastspitze_status_quo_kw": 1879,
+      "lastspitze_optimiert_kw": 1355,
+      "einsparung_eur_a": 106268
+    },
+    {
+      "horizont": "Woche, viertelstündlich",
+      "schritte": 672,
+      "lastspitze_status_quo_kw": 1845,
+      "lastspitze_optimiert_kw": 1368,
+      "einsparung_eur_a": 103714
+    },
+    {
+      "horizont": "Monat (30 Tage), stündlich",
+      "schritte": 720,
+      "lastspitze_status_quo_kw": 1923,
+      "lastspitze_optimiert_kw": 1372,
+      "einsparung_eur_a": 110052
+    }
+  ],
+  "kalibrierung": {
+    "wahr": {
+      "thermal_cap_kwh_per_k": 1500.0,
+      "extra_loss_kw_per_k": 35.0,
+      "cooling_base_kw": 1450.0,
+      "cooling_per_k_amb": 45.0,
+      "cooling_shift_kw": 420.0
+    },
+    "geschaetzt": {
+      "thermal_cap_kwh_per_k": 1535.94,
+      "extra_loss_kw_per_k": 31.73,
+      "cooling_base_kw": 1444.27,
+      "cooling_per_k_amb": 44.33,
+      "cooling_shift_kw": 431.12,
+      "rmse_fit_k": 0.11,
+      "rmse_sim_k": 0.11,
+      "n_samples": 168
+    },
+    "abweichung_pct": {
+      "thermal_cap_kwh_per_k": 2.4,
+      "extra_loss_kw_per_k": -9.3,
+      "cooling_base_kw": -0.4,
+      "cooling_per_k_amb": -1.5,
+      "cooling_shift_kw": 2.6
+    }
+  },
+  "unsicherheit": [
+    {
+      "variante": "Status quo",
+      "prognose_rmse_eur_mwh": 0.0,
+      "lastspitze_kw": 1879,
+      "kosten_eur_a": 2218395,
+      "einsparung_eur_a": 0
+    },
+    {
+      "variante": "Woche, perfekte Voraussicht",
+      "prognose_rmse_eur_mwh": 0.0,
+      "lastspitze_kw": 1355,
+      "kosten_eur_a": 2112127,
+      "einsparung_eur_a": 106268
+    },
+    {
+      "variante": "MPC 48 h, perfekte Preisprognose",
+      "prognose_rmse_eur_mwh": 0.0,
+      "lastspitze_kw": 1378,
+      "kosten_eur_a": 2119550,
+      "einsparung_eur_a": 98845
+    },
+    {
+      "variante": "MPC 48 h, Persistenz (Vortagspreis)",
+      "prognose_rmse_eur_mwh": 10.7,
+      "lastspitze_kw": 1378,
+      "kosten_eur_a": 2115221,
+      "einsparung_eur_a": 103174
+    },
+    {
+      "variante": "MPC 48 h, Prognosefehler σ = 15 €/MWh",
+      "prognose_rmse_eur_mwh": 13.9,
+      "lastspitze_kw": 1378,
+      "kosten_eur_a": 2121999,
+      "einsparung_eur_a": 96397
+    },
+    {
+      "variante": "MPC 48 h, Prognosefehler σ = 30 €/MWh",
+      "prognose_rmse_eur_mwh": 27.8,
+      "lastspitze_kw": 1378,
+      "kosten_eur_a": 2133211,
+      "einsparung_eur_a": 85184
+    }
+  ]
+}
