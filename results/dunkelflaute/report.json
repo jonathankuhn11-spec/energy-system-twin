@@ -1,0 +1,86 @@
+{
+  "standort": "Frischwerk Münsterland GmbH",
+  "szenario": "dunkelflaute",
+  "kpis": [
+    {
+      "szenario": "A Status quo",
+      "lastspitze_kw": 1879,
+      "arbeitskosten_woche_eur": 67031,
+      "leistungspreis_eur_a": 225489,
+      "einsparung_eur_a": 0,
+      "t_min_c": 4.0,
+      "t_max_c": 4.0
+    },
+    {
+      "szenario": "B Vorkühlung",
+      "lastspitze_kw": 1507,
+      "arbeitskosten_woche_eur": 65947,
+      "leistungspreis_eur_a": 180789,
+      "einsparung_eur_a": 101048,
+      "t_min_c": 2.0,
+      "t_max_c": 6.0
+    },
+    {
+      "szenario": "C Vorkühlung + Batterie 1000 kWh",
+      "lastspitze_kw": 1446,
+      "arbeitskosten_woche_eur": 65699,
+      "leistungspreis_eur_a": 173528,
+      "einsparung_eur_a": 121229,
+      "t_min_c": 2.0,
+      "t_max_c": 6.0
+    }
+  ],
+  "batterie_dimensionierung": [
+    {
+      "kwh": 250,
+      "mehrwert_eur_a": 6455,
+      "capex_eur": 87500,
+      "amortisation_a": 13.6
+    },
+    {
+      "kwh": 500,
+      "mehrwert_eur_a": 11939,
+      "capex_eur": 175000,
+      "amortisation_a": 14.7
+    },
+    {
+      "kwh": 750,
+      "mehrwert_eur_a": 16451,
+      "capex_eur": 262500,
+      "amortisation_a": 16.0
+    },
+    {
+      "kwh": 1000,
+      "mehrwert_eur_a": 20181,
+      "capex_eur": 350000,
+      "amortisation_a": 17.3
+    },
+    {
+      "kwh": 1500,
+      "mehrwert_eur_a": 25339,
+      "capex_eur": 525000,
+      "amortisation_a": 20.7
+    },
+    {
+      "kwh": 2000,
+      "mehrwert_eur_a": 28342,
+      "capex_eur": 700000,
+      "amortisation_a": 24.7
+    },
+    {
+      "kwh": 3000,
+      "mehrwert_eur_a": 29328,
+      "capex_eur": 1050000,
+      "amortisation_a": 35.8
+    }
+  ],
+  "datenqualitaet": {
+    "protokoll": [
+      "Niveausprung bei 17.09. 12:00, Faktor 1.248 korrigiert",
+      "Lücke 10.09. 03:00 (30 min) linear gefüllt",
+      "Lücke 16.09. 09:00 (600 min) per Wochenprofil gefüllt",
+      "Lücke 24.09. 17:00 (45 min) linear gefüllt"
+    ],
+    "abweichung_zur_wahrheit_mape_pct": 0.15
+  }
+}

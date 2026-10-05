@@ -1,0 +1,86 @@
+{
+  "standort": "Frischwerk Münsterland GmbH",
+  "szenario": "normal",
+  "kpis": [
+    {
+      "szenario": "A Status quo",
+      "lastspitze_kw": 1879,
+      "arbeitskosten_woche_eur": 38325,
+      "leistungspreis_eur_a": 225489,
+      "einsparung_eur_a": 0,
+      "t_min_c": 4.0,
+      "t_max_c": 4.0
+    },
+    {
+      "szenario": "B Vorkühlung",
+      "lastspitze_kw": 1355,
+      "arbeitskosten_woche_eur": 37490,
+      "leistungspreis_eur_a": 162621,
+      "einsparung_eur_a": 106268,
+      "t_min_c": 2.0,
+      "t_max_c": 6.0
+    },
+    {
+      "szenario": "C Vorkühlung + Batterie 1000 kWh",
+      "lastspitze_kw": 1293,
+      "arbeitskosten_woche_eur": 37282,
+      "leistungspreis_eur_a": 155176,
+      "einsparung_eur_a": 124555,
+      "t_min_c": 2.0,
+      "t_max_c": 6.0
+    }
+  ],
+  "batterie_dimensionierung": [
+    {
+      "kwh": 250,
+      "mehrwert_eur_a": 5584,
+      "capex_eur": 87500,
+      "amortisation_a": 15.7
+    },
+    {
+      "kwh": 500,
+      "mehrwert_eur_a": 10473,
+      "capex_eur": 175000,
+      "amortisation_a": 16.7
+    },
+    {
+      "kwh": 750,
+      "mehrwert_eur_a": 14841,
+      "capex_eur": 262500,
+      "amortisation_a": 17.7
+    },
+    {
+      "kwh": 1000,
+      "mehrwert_eur_a": 18287,
+      "capex_eur": 350000,
+      "amortisation_a": 19.1
+    },
+    {
+      "kwh": 1500,
+      "mehrwert_eur_a": 22043,
+      "capex_eur": 525000,
+      "amortisation_a": 23.8
+    },
+    {
+      "kwh": 2000,
+      "mehrwert_eur_a": 23995,
+      "capex_eur": 700000,
+      "amortisation_a": 29.2
+    },
+    {
+      "kwh": 3000,
+      "mehrwert_eur_a": 28190,
+      "capex_eur": 1050000,
+      "amortisation_a": 37.2
+    }
+  ],
+  "datenqualitaet": {
+    "protokoll": [
+      "Niveausprung bei 17.09. 12:00, Faktor 1.248 korrigiert",
+      "Lücke 10.09. 03:00 (30 min) linear gefüllt",
+      "Lücke 16.09. 09:00 (600 min) per Wochenprofil gefüllt",
+      "Lücke 24.09. 17:00 (45 min) linear gefüllt"
+    ],
+    "abweichung_zur_wahrheit_mape_pct": 0.15
+  }
+}

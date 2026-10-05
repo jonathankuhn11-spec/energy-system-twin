@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Digitaler Zwilling · Frischwerk Münsterland</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#EEF3F4;--surface:#FFFFFF;--ink:#10313D;--muted:#5B7480;--line:#C9D6DA;
+  --cold:#1F7A99;--sun:#C98912;--price:#A63D62;--bat:#3C8A5A;--grid:#6E7F86;--ok:#2F7D4F;--warn:#B5452F;
+  --cold-wash:#DCEBF0;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1E24;--surface:#15292F;--ink:#E2EEF1;--muted:#8FA8B0;--line:#24414A;
+  --cold:#5BB8D6;--sun:#F0B43C;--price:#E0789E;--bat:#6CC08A;--grid:#9AABB1;--ok:#6CC08A;--warn:#F08A6E;--cold-wash:#173A45;}}
+:root[data-theme="dark"]{
+  --bg:#0E1E24;--surface:#15292F;--ink:#E2EEF1;--muted:#8FA8B0;--line:#24414A;
+  --cold:#5BB8D6;--sun:#F0B43C;--price:#E0789E;--bat:#6CC08A;--grid:#9AABB1;--ok:#6CC08A;--warn:#F08A6E;--cold-wash:#173A45;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 "Barlow",system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3,.cond{font-family:"Barlow Semi Condensed","Barlow",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 18px 48px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px;margin-bottom:14px}
+header.top h1{margin:0;font-size:clamp(1.6rem,3.4vw,2.3rem);font-weight:700;line-height:1.1;letter-spacing:-.01em}
+header.top p{margin:0;color:var(--muted);max-width:60ch}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:18px 0 18px}
+.tabs button{font:600 1.05rem "Barlow Semi Condensed",sans-serif;background:none;border:0;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--cold)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--cold);outline-offset:2px}
+
+/* Anlagenschema: das Herzstück */
+.plant{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 14px 10px;position:relative}
+.plant svg{width:100%;height:auto;display:block}
+.plant .node rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
+.plant .node text{fill:var(--ink);font:600 15px "Barlow Semi Condensed",sans-serif}
+.plant .node .val{font:500 14px "Barlow",sans-serif;fill:var(--muted)}
+.flow{fill:none;stroke-linecap:round;stroke-dasharray:2 12;animation:run 1.1s linear infinite}
+.flow.rev{animation-direction:reverse}
+.flow.idle{stroke-dasharray:none;opacity:.18;animation:none}
+@keyframes run{to{stroke-dashoffset:-28}}
+@media (prefers-reduced-motion:reduce){.flow{animation:none;stroke-dasharray:none}}
+.scrub{display:flex;align-items:center;gap:12px;margin-top:6px;flex-wrap:wrap}
+.scrub input[type=range]{flex:1;min-width:180px;accent-color:var(--cold)}
+.scrub .when{font:600 1rem "Barlow Semi Condensed",sans-serif;min-width:150px}
+.btn{font:600 .98rem "Barlow Semi Condensed",sans-serif;background:var(--cold);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+:root[data-theme="dark"] .btn{color:#0E1E24}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn{color:#0E1E24}}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+
+.grid{display:grid;grid-template-columns:300px 1fr;gap:18px;margin-top:18px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.panel h2{margin:0 0 10px;font-size:1.15rem;font-weight:600}
+.ctl{margin-bottom:14px}
+.ctl label{display:flex;justify-content:space-between;font-weight:500;font-size:.95rem}
+.ctl label span{color:var(--muted);font-variant-numeric:tabular-nums}
+.ctl input[type=range]{width:100%;accent-color:var(--cold)}
+.ctl select{width:100%;font:inherit;padding:6px 8px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.toggle{display:flex;align-items:center;gap:8px;font-weight:500}
+.toggle input{width:18px;height:18px;accent-color:var(--cold)}
+.hint{color:var(--muted);font-size:.86rem;margin:2px 0 0}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:18px}
+.kpi{background:var(--surface);padding:12px 14px}
+.kpi .v{font:700 1.6rem/1.1 "Barlow Semi Condensed",sans-serif;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:.88rem}
+.kpi .d{font-size:.86rem;font-weight:600}
+.d.good{color:var(--ok)}.d.bad{color:var(--warn)}
+.chartbox{position:relative;height:250px;margin-bottom:14px}
+.chartbox.small{height:170px}
+.busy{position:absolute;top:14px;right:18px;color:var(--muted);font-size:.9rem;display:none}
+.busy.on{display:block}
+
+/* Arbeitstag */
+.day{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:860px){.day{grid-template-columns:1fr}}
+.mail{border-left:4px solid var(--cold);background:var(--surface);border-radius:0 10px 10px 0;padding:14px 16px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.mail+.mail{margin-top:14px}
+.mail.done{border-left-color:var(--ok)}
+.mail .from{color:var(--muted);font-size:.88rem}
+.mail h3{margin:2px 0 6px;font-size:1.15rem;font-weight:600}
+.mail p{margin:0 0 8px;max-width:68ch}
+.mail .target{font-weight:600}
+.status{display:inline-block;font:600 .85rem "Barlow Semi Condensed",sans-serif;padding:2px 10px;border-radius:99px;background:var(--cold-wash);color:var(--ink)}
+.mail.done .status{background:var(--ok);color:var(--surface)}
+.mail .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.mail textarea{width:100%;min-height:90px;font:inherit;padding:8px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);margin-top:6px}
+.mail fieldset{border:0;padding:0;margin:6px 0 0;display:flex;gap:16px;flex-wrap:wrap}
+.feedback{font-size:.92rem;margin-top:6px}
+.progress{font:700 1.3rem "Barlow Semi Condensed",sans-serif;margin:0 0 10px}
+.clock{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:.95rem}
+.clock .t{font:600 1rem "Barlow Semi Condensed",sans-serif;color:var(--cold);font-variant-numeric:tabular-nums}
+footer{color:var(--muted);font-size:.86rem;margin-top:26px;max-width:80ch}
+#kpis2 .kpi:last-child{grid-column:1/-1}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <h1>Frischwerk Münsterland: digitaler Zwilling</h1>
+    <p>Molkerei mit Kühllager, 1,9 MW Spitzenlast. Verschiebe Kälte in günstige Stunden, kappe Lastspitzen und prüfe, ob sich ein Speicher lohnt.</p>
+  </div>
+  <button class="btn ghost" id="themeBtn" type="button">Hell/Dunkel</button>
+</header>
+
+<section class="plant" aria-label="Anlagenschema mit Energieflüssen">
+  <svg viewBox="0 0 900 300" role="img" aria-labelledby="schemaTitle">
+    <title id="schemaTitle">Energieflüsse am Standort zur gewählten Stunde</title>
+    <path id="fGrid" class="flow" d="M150 150 H 360" />
+    <path id="fPv" class="flow" d="M450 70 V 115" />
+    <path id="fBat" class="flow" d="M450 185 V 230" />
+    <path id="fCool" class="flow" d="M540 150 C 600 150 600 80 660 80" />
+    <path id="fProc" class="flow" d="M540 150 C 600 150 600 220 660 220" />
+    <g class="node"><rect x="30" y="118" width="120" height="64" rx="10"/><text x="46" y="144">Stromnetz</text><text class="val" id="vGrid" x="46" y="166">–</text></g>
+    <g class="node"><rect x="380" y="10" width="140" height="60" rx="10"/><text x="396" y="35">PV-Dach</text><text class="val" id="vPv" x="396" y="56">–</text></g>
+    <g class="node"><rect x="360" y="115" width="180" height="70" rx="10" style="stroke:var(--cold);stroke-width:2"/><text x="378" y="143">Hauptverteilung</text><text class="val" id="vSum" x="378" y="166">–</text></g>
+    <g class="node"><rect x="380" y="230" width="140" height="60" rx="10"/><text x="396" y="255">Batterie</text><text class="val" id="vBat" x="396" y="276">–</text></g>
+    <g class="node"><rect x="660" y="40" width="210" height="80" rx="10"/><text x="676" y="66">Kälte + Kühlhaus</text><text class="val" id="vCool" x="676" y="88">–</text>
+      <rect x="836" y="50" width="18" height="60" rx="9" style="fill:var(--cold-wash);stroke:var(--line)"/><rect id="thermo" x="839" y="80" width="12" height="27" rx="6" style="fill:var(--cold);stroke:none"/><text class="val" id="vTemp" x="676" y="108">–</text></g>
+    <g class="node"><rect x="660" y="190" width="210" height="62" rx="10"/><text x="676" y="216">Produktion</text><text class="val" id="vProc" x="676" y="238">–</text></g>
+  </svg>
+  <div class="scrub">
+    <button class="btn" id="playBtn" type="button">Woche abspielen</button>
+    <input type="range" id="hour" min="0" max="167" value="56" aria-label="Stunde der Woche">
+    <span class="when" id="when">–</span>
+  </div>
+</section>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" aria-controls="tabTwin" id="t1">Zwilling</button>
+  <button role="tab" aria-selected="false" aria-controls="tabDay" id="t2">Arbeitstag</button>
+</nav>
+
+<div id="tabTwin" role="tabpanel" aria-labelledby="t1">
+  <div class="grid">
+    <aside class="panel" aria-label="Parameter">
+      <h2>Parameter</h2>
+      <div class="ctl"><label for="scn">Marktszenario</label>
+        <select id="scn"><option value="normal">Normalwoche</option><option value="dunkelflaute">Dunkelflaute (Preisspitzen, wenig PV)</option></select></div>
+      <div class="ctl"><label class="toggle"><input type="checkbox" id="pre" checked> Vorkühlung (Kühlhaus als Speicher)</label></div>
+      <div class="ctl"><label for="band">Temperaturband <span id="bandV"></span></label>
+        <input type="range" id="band" min="0" max="2" step="0.25" value="2"><p class="hint">Spielraum um 4 °C Sollwert</p></div>
+      <div class="ctl"><label for="bat">Batteriespeicher <span id="batV"></span></label>
+        <input type="range" id="bat" min="0" max="3000" step="250" value="0"><p class="hint">C-Rate 0,5, Wirkungsgrad 95 % je Richtung</p></div>
+      <div class="ctl"><label for="pv">PV-Leistung <span id="pvV"></span></label>
+        <input type="range" id="pv" min="0" max="3000" step="250" value="1500"></div>
+      <div class="ctl"><label for="dc">Leistungspreis <span id="dcV"></span></label>
+        <input type="range" id="dc" min="40" max="200" step="10" value="120"></div>
+      <button class="btn ghost" id="reset" type="button">Zurücksetzen</button>
+    </aside>
+    <section>
+      <div class="kpis" id="kpis"></div>
+      <div class="panel" style="position:relative">
+        <span class="busy" id="busy">Optimiere …</span>
+        <h2>Netzbezug: Status quo vs. optimiert</h2>
+        <div class="chartbox"><canvas id="cLoad" aria-label="Netzbezug über die Woche"></canvas></div>
+        <h2>Kühlhaustemperatur und Spotpreis</h2>
+        <div class="chartbox small"><canvas id="cTemp" aria-label="Temperatur und Preis"></canvas></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="tabDay" role="tabpanel" aria-labelledby="t2" hidden>
+  <div class="day">
+    <section>
+      <p class="progress" id="prog">0 von 4 Aufgaben erledigt</p>
+      <div id="missions"></div>
+    </section>
+    <aside class="panel">
+      <h2>Dein Tag als Field Value Engineer</h2>
+      <div class="clock">
+        <span class="t">08:30</span><span>Datenqualität der Nacht prüfen</span>
+        <span class="t">09:30</span><span>Zwilling kalibrieren</span>
+        <span class="t">11:00</span><span>Kundencall: Lastspitzen (Aufgabe 1)</span>
+        <span class="t">13:30</span><span>Business Case Vorkühlung und Batterie (Aufgaben 2–3)</span>
+        <span class="t">15:00</span><span>Fahrplan für die Dunkelflaute (Aufgabe 4)</span>
+        <span class="t">16:00</span><span>Onboarding Neukunde</span>
+        <span class="t">17:00</span><span>Dokumentation im CRM</span>
+      </div>
+      <p class="hint" style="margin-top:14px">Die Aufgaben prüfen sich live gegen den Zwilling. Stell die Parameter im Reiter „Zwilling“ ein und komm hierher zurück. Die KPIs unten zeigen den aktuellen Stand.</p>
+      <div class="kpis" id="kpis2" style="margin-top:12px;grid-template-columns:1fr 1fr"></div>
+    </aside>
+  </div>
+</div>
+
+<footer>Fiktiver Kunde, synthetische Daten. Stündliches Modell, Kühlhaus als thermisches Einknotenmodell, perfekte Voraussicht. Optimierung per dynamischer Programmierung über diskretisierte Speicherzustände mit Suche über die Spitzenlast-Obergrenze (Kühlhaus und Batterie nacheinander); das begleitende Python-Projekt löst dasselbe Problem exakt als lineares Programm. Kosten p. a. = repräsentative Woche × 52 plus Leistungspreis auf die Wochenspitze.</footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+const H = 168, COP = 3, TREF = 4, CAP = 1500, LOSS = 35, FEE = 110, SHARE = 0.9, QMAX = 900 * COP, ETA = 0.95, CAPEX = 350;
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 0) => x.toLocaleString("de-DE", { maximumFractionDigits: d, minimumFractionDigits: d });
+const DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gauss(r) { return Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(2 * Math.PI * r()); }
+
+function makeSeries(scn, pvKwp) {
+  const r = rng(7), price = [], pv = [], proc = [], dem = [];
+  const cloud = Array.from({ length: 7 }, () => (0.35 + 0.65 * r()) * (scn === "dunkelflaute" ? 0.25 : 1));
+  for (let t = 0; t < H; t++) {
+    const h = t % 24, d = Math.floor(t / 24);
+    let p = 95 + 18 * Math.exp(-((h - 8) ** 2) / 6) + 30 * Math.exp(-((h - 19) ** 2) / 5) - 35 * Math.exp(-((h - 13) ** 2) / 8) + (d >= 5 ? -15 : 0) + 6 * gauss(r);
+    if (scn === "dunkelflaute") { p = p * 1.6 + 40; if ((d === 2 || d === 3) && h >= 17 && h < 21) p += 190; }
+    price.push(p);
+    const bell = Math.max(0, Math.sin((h - 6) / 14 * Math.PI)) ** 1.5;
+    pv.push(pvKwp * 0.72 * bell * cloud[d]);
+    const shift = h >= 6 && h < 22 && d < 6;
+    let pl = (shift ? 950 : 420) + 40 * gauss(r);
+    if (shift && h === 6) pl += 250;
+    if (d < 6 && h === 22) pl += 180;
+    if (d === 6) pl = 380;
+    proc.push(pl);
+    const tamb = 14 + 6 * Math.sin((h - 9) / 24 * 2 * Math.PI);
+    dem.push(1450 + 45 * (tamb - 10) + (shift ? 420 : 0));
+  }
+  return { price, pv, proc, dem };
+}
+
+// Zustände aus Fahrplan berechnen
+function temps(Qc, s) { const T = new Float64Array(H + 1); T[0] = TREF; for (let t = 0; t < H; t++) T[t + 1] = T[t] + (s.dem[t] + LOSS * (TREF - T[t]) - Qc[t]) / CAP; return T; }
+function socs(B, cap) { const E = new Float64Array(H + 1); E[0] = 0.5 * cap; for (let t = 0; t < H; t++) E[t + 1] = E[t] + (B[t] > 0 ? ETA * B[t] : B[t] / ETA); return E; }
+function load(Qc, B, s) { const L = new Float64Array(H); for (let t = 0; t < H; t++) L[t] = s.proc[t] + Qc[t] / COP + B[t] - s.pv[t]; return L; }
+function energyWeek(L, s) { let e = 0; for (let t = 0; t < H; t++) e += L[t] > 0 ? L[t] * (s.price[t] + FEE) / 1000 : L[t] * s.price[t] * SHARE / 1000; return e; }
+function peakOf(L) { let m = 0; for (const x of L) if (x > m) m = x; return m; }
+function costStep(L, t, s) { return L > 0 ? L * (s.price[t] + FEE) / 1000 : L * s.price[t] * SHARE / 1000; }
+// DP über diskrete Zustände; trans(t,a,b) -> [Lastbeitrag, ok]; base[t] = restliche Netzlast
+function dpRun(levels, startIdx, endIdx, baseL, trans, P, s) {
+  const n = levels.length, INF = 1e18;
+  let V = new Float64Array(n).fill(INF); V[startIdx] = 0;
+  const arg = []; 
+  for (let t = 0; t < H; t++) {
+    const V2 = new Float64Array(n).fill(INF), A = new Int16Array(n).fill(-1);
+    for (let a = 0; a < n; a++) { if (V[a] >= INF) continue;
+      for (let b = 0; b < n; b++) { const x = trans(t, a, b); if (x === null) continue;
+        const L = baseL[t] + x; if (L > P) continue;
+        const c = V[a] + costStep(L, t, s); if (c < V2[b]) { V2[b] = c; A[b] = a; } } }
+    arg.push(A); V = V2;
+  }
+  if (V[endIdx] >= INF) return null;
+  const path = new Int16Array(H + 1); path[H] = endIdx;
+  for (let t = H - 1; t >= 0; t--) path[t] = arg[t][path[t + 1]];
+  return { cost: V[endIdx], path };
+}
+function scanPeak(solve, lo, hi, dc) {
+  let best = null;
+  const tryP = P => { const r = solve(P); if (!r) return; const J = 52 * r.cost + dc * P; if (!best || J < best.J) best = { ...r, J, P }; };
+  const N = 28; for (let k = 0; k <= N; k++) tryP(lo + (hi - lo) * k / N);
+  if (!best) return null;
+  const w = (hi - lo) / N; for (let k = -6; k <= 6; k++) tryP(best.P + w * k / 6);
+  return best;
+}
+function optimize(p, s) {
+  const Qc = Float64Array.from(s.dem), B = new Float64Array(H);
+  const coolOn = p.pre && p.band > 0;
+  const hi0 = (() => { let m = 0; for (let t = 0; t < H; t++) m = Math.max(m, s.proc[t] + s.dem[t] / COP - s.pv[t]); return m + 1; })();
+  if (coolOn) {
+    const n = 41, lv = Array.from({ length: n }, (_, k) => TREF - p.band + 2 * p.band * k / (n - 1));
+    const baseL = s.proc.map((x, t) => x - s.pv[t]);
+    const trans = (t, a, b) => { const q = s.dem[t] + LOSS * (TREF - lv[a]) - CAP * (lv[b] - lv[a]); return q < 0 || q > QMAX ? null : q / COP; };
+    const best = scanPeak(P => dpRun(lv, 20, 20, baseL, trans, P, s), 300, hi0, p.dc);
+    if (best) for (let t = 0; t < H; t++) Qc[t] = s.dem[t] + LOSS * (TREF - lv[best.path[t]]) - CAP * (lv[best.path[t + 1]] - lv[best.path[t]]);
+  }
+  if (p.bat > 0) {
+    const n = 31, cap = p.bat, pmax = cap / 2, lv = Array.from({ length: n }, (_, k) => cap * (0.05 + 0.9 * k / (n - 1)));
+    const baseL = Array.from({ length: H }, (_, t) => s.proc[t] + Qc[t] / COP - s.pv[t]);
+    const trans = (t, a, b) => { const d = lv[b] - lv[a]; const x = d >= 0 ? d / ETA : d * ETA; return Math.abs(x) > pmax + 1e-9 ? null : x; };
+    let hi = 0; for (const x of baseL) hi = Math.max(hi, x); hi += 1;
+    const best = scanPeak(P => dpRun(lv, 15, 15, baseL, trans, P, s), Math.max(0, hi - pmax - 50), hi, p.dc);
+    if (best) for (let t = 0; t < H; t++) { const d = lv[best.path[t + 1]] - lv[best.path[t]]; B[t] = d >= 0 ? d / ETA : d * ETA; }
+  }
+  return { Qc, B };
+}
+
+function evaluate(plan, s, p) {
+  const L = load(plan.Qc, plan.B, s), T = temps(plan.Qc, s), E = socs(plan.B, p.bat);
+  const ew = energyWeek(L, s), pk = peakOf(L);
+  let shifted = 0; for (let t = 0; t < H; t++) shifted += Math.abs(plan.Qc[t] - s.dem[t]);
+  return { Qc: plan.Qc, B: plan.B, L, T, E, ew, peak: pk, annual: 52 * ew + p.dc * pk, shiftedMWh: shifted / 2 / COP / 1000 * 52, tmin: Math.min(...T), tmax: Math.max(...T) };
+}
+
+// ---------- Zustand und Rendering ----------
+const DEF = { scn: "normal", pre: true, band: 2, bat: 0, pv: 1500, dc: 120 };
+let P = { ...DEF }, S, base, opt, ref, chartLoad, chartTemp, timer = null, playT = null;
+const cache = new Map();
+
+function read() { P = { scn: $("scn").value, pre: $("pre").checked, band: +$("band").value, bat: +$("bat").value, pv: +$("pv").value, dc: +$("dc").value }; }
+function write(p) { $("scn").value = p.scn; $("pre").checked = p.pre; $("band").value = p.band; $("bat").value = p.bat; $("pv").value = p.pv; $("dc").value = p.dc; }
+function labels() {
+  $("bandV").textContent = P.band ? `${fmt(TREF - P.band, 2)}–${fmt(TREF + P.band, 2)} °C` : "fix 4 °C";
+  $("batV").textContent = P.bat ? `${fmt(P.bat)} kWh / ${fmt(P.bat / 2)} kW` : "keiner";
+  $("pvV").textContent = `${fmt(P.pv)} kWp`; $("dcV").textContent = `${fmt(P.dc)} €/kW·a`;
+}
+function run(p) {
+  const key = JSON.stringify(p); if (cache.has(key)) return cache.get(key);
+  const s = makeSeries(p.scn, p.pv), r = evaluate(optimize(p, s), s, p); cache.set(key, r); return r;
+}
+
+function recompute() {
+  read(); labels();
+  $("busy").classList.add("on");
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    S = makeSeries(P.scn, P.pv);
+    base = run({ ...P, pre: false, bat: 0 });
+    opt = run(P);
+    ref = P.bat > 0 ? run({ ...P, bat: 0 }) : opt; // Batterie-Mehrwert gegenüber Variante ohne Batterie
+    draw(); $("busy").classList.remove("on");
+  }, 60);
+}
+
+function kpiHtml() {
+  const sav = base.annual - opt.annual, pct = sav / base.annual * 100;
+  const batGain = P.bat > 0 ? ref.annual - opt.annual : 0, payback = batGain > 0 ? P.bat * CAPEX / batGain : null;
+  const d = (v, good, txt) => `<div class="d ${good ? "good" : "bad"}">${txt}</div>`;
+  const cell = (v, l, extra = "") => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${extra}</div>`;
+  return cell(`${fmt(opt.peak)} kW`, "Lastspitze", d(0, opt.peak < base.peak - 1, `${fmt(opt.peak - base.peak)} kW vs. Status quo`))
+    + cell(`${fmt(opt.annual / 1e6, 2)} Mio €`, "Energiekosten p. a.", d(0, sav > 1, `${sav >= 0 ? "−" : "+"}${fmt(Math.abs(sav) / 1000)} k€ (${fmt(pct, 1)} %)`))
+    + cell(`${fmt(opt.shiftedMWh, 0)} MWh`, "Kältelast verschoben p. a. (el.)")
+    + cell(payback ? `${fmt(payback, 1)} J.` : "–", "Amortisation Batterie", P.bat ? `<div class="d">Mehrwert ${fmt(batGain / 1000, 1)} k€/a</div>` : "")
+    + cell(`${fmt(opt.tmin, 1)}–${fmt(opt.tmax, 1)} °C`, "Kühlhaus Min–Max", d(0, opt.tmin >= 1.99 && opt.tmax <= 6.01, opt.tmin >= 1.99 && opt.tmax <= 6.01 ? "Kühlkette sicher" : "Band verletzt"));
+}
+
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function draw() {
+  $("kpis").innerHTML = kpiHtml(); $("kpis2").innerHTML = kpiHtml();
+  const lab = Array.from({ length: H }, (_, t) => `${DAYS[Math.floor(t / 24)]} ${String(t % 24).padStart(2, "0")}:00`);
+  const C = { ink: css("--ink"), muted: css("--muted"), line: css("--line"), cold: css("--cold"), sun: css("--sun"), price: css("--price"), grid: css("--grid") };
+  const common = { animation: false, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    plugins: { legend: { labels: { color: C.ink, font: { family: "Barlow" }, boxWidth: 14 } } },
+    scales: { x: { ticks: { color: C.muted, maxTicksLimit: 8, autoSkip: true }, grid: { color: C.line } } } };
+  const dsLoad = [
+    { label: "Status quo", data: Array.from(base.L), borderColor: C.grid, borderWidth: 1.5, pointRadius: 0, tension: .2 },
+    { label: "Optimiert", data: Array.from(opt.L), borderColor: C.cold, borderWidth: 2.2, pointRadius: 0, tension: .2 },
+    { label: "PV", data: S.pv, borderColor: C.sun, backgroundColor: C.sun + "33", fill: true, borderWidth: 0, pointRadius: 0 }];
+  const dsTemp = [
+    { label: "Kühlhaus °C", data: Array.from(opt.T).slice(0, H), borderColor: C.cold, borderWidth: 2, pointRadius: 0, yAxisID: "y" },
+    { label: "Spot €/MWh", data: S.price, borderColor: C.price, borderWidth: 1.3, pointRadius: 0, yAxisID: "y1" }];
+  if (!chartLoad) {
+    chartLoad = new Chart($("cLoad"), { type: "line", data: { labels: lab, datasets: dsLoad }, options: { ...common, scales: { ...common.scales, y: { title: { display: true, text: "kW", color: C.muted }, ticks: { color: C.muted }, grid: { color: C.line } } } } });
+    chartTemp = new Chart($("cTemp"), { type: "line", data: { labels: lab, datasets: dsTemp }, options: { ...common, scales: { ...common.scales,
+      y: { min: 1.5, max: 6.5, title: { display: true, text: "°C", color: C.muted }, ticks: { color: C.muted }, grid: { color: C.line } },
+      y1: { position: "right", title: { display: true, text: "€/MWh", color: C.muted }, ticks: { color: C.muted }, grid: { display: false } } } } });
+  } else {
+    chartLoad.data.datasets = dsLoad; chartTemp.data.datasets = dsTemp;
+    for (const ch of [chartLoad, chartTemp]) { ch.options.plugins.legend.labels.color = C.ink; for (const ax of Object.values(ch.options.scales)) { if (ax.ticks) ax.ticks.color = C.muted; if (ax.grid && ax.grid.display !== false) ax.grid.color = C.line; } ch.update(); }
+  }
+  drawHour(); checkMissions();
+}
+
+function setFlow(id, kw, color, max = 2000) {
+  const el = $(id), w = 2 + 14 * Math.min(1, Math.abs(kw) / max);
+  el.style.stroke = color; el.style.strokeWidth = w;
+  el.classList.toggle("idle", Math.abs(kw) < 5); el.classList.toggle("rev", kw < 0);
+}
+function drawHour() {
+  if (!opt) return;
+  const t = +$("hour").value, plan = opt;
+  const grid = plan.L[t], pv = S.pv[t], cool = plan.Qc[t] / COP, bat = plan.B[t];
+  const T = plan.T[t + 1];
+  $("when").textContent = `${["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][Math.floor(t / 24)]}, ${String(t % 24).padStart(2, "0")}:00 Uhr · ${fmt(S.price[t])} €/MWh`;
+  $("vGrid").textContent = grid >= 0 ? `Bezug ${fmt(grid)} kW` : `Einspeisung ${fmt(-grid)} kW`;
+  $("vPv").textContent = `${fmt(pv)} kW`;
+  $("vBat").textContent = P.bat ? `${bat >= 0 ? "lädt" : "entlädt"} ${fmt(Math.abs(bat))} kW · ${fmt(plan.E[t + 1] / P.bat * 100)} %` : "nicht installiert";
+  $("vCool").textContent = `${fmt(cool)} kW el.`;
+  $("vTemp").textContent = `${fmt(T, 1)} °C im Lager`;
+  $("vProc").textContent = `${fmt(S.proc[t])} kW`;
+  $("vSum").textContent = `Netzlast ${fmt(Math.max(0, grid))} kW`;
+  const h = Math.max(4, Math.min(54, (T - 1.5) / 5 * 54)); $("thermo").setAttribute("y", 107 - h); $("thermo").setAttribute("height", h);
+  setFlow("fGrid", grid, css("--grid")); setFlow("fPv", pv, css("--sun"), 1500);
+  setFlow("fBat", -bat, css("--bat"), 1500); setFlow("fCool", cool, css("--cold"), 900); setFlow("fProc", S.proc[t], css("--price"), 1400);
+}
+
+// ---------- Arbeitstag-Missionen ----------
+const answers = { m3: null, m4: "" };
+const M = [
+  { id: "m1", from: "Werkleiter Frischwerk, 08:52", title: "Unsere Lastspitze kostet zu viel",
+    body: "Der Leistungspreis frisst uns auf. Bekommen wir die Spitze unter 1.500 kW, ohne dass das Kühlhaus aus dem Band läuft? Eine Batterie wollen wir dafür nicht kaufen.",
+    target: "Lastspitze < 1.500 kW, Normalwoche, keine Batterie, Kühlkette sicher.",
+    check: () => P.scn === "normal" && P.bat === 0 && opt.peak < 1500 && opt.tmin >= 1.99 && opt.tmax <= 6.01 },
+  { id: "m2", from: "Energiemanagerin Frischwerk, 10:15", title: "Was bringt uns die Vorkühlung in Euro?",
+    body: "Ich muss das intern verkaufen. Schaff mindestens 3,5 % weniger Energiekosten pro Jahr, nur über die Fahrweise der Kälteanlage. Und bitte so, dass ich das Temperaturband nicht voll ausreizen muss.",
+    target: "≥ 3,5 % Kostensenkung, keine Batterie, Band höchstens ±1,5 K.",
+    check: () => P.scn === "normal" && P.bat === 0 && P.band <= 1.5 && (base.annual - opt.annual) / base.annual >= 0.035 },
+  { id: "m3", from: "CFO Frischwerk, 13:40", title: "Lohnt sich ein Batteriespeicher?",
+    body: "Ein Anbieter will uns 1.000 kWh für 350 k€ verkaufen. Unsere Vorgabe: Amortisation unter 8 Jahren. Rechne es mit Vorkühlung durch und gib mir eine klare Antwort.",
+    target: "Batterie auf 1.000 kWh stellen, Vorkühlung an, Amortisation ablesen und entscheiden.",
+    quiz: true,
+    check: () => answers.m3 === "nein" && P.bat === 1000 && P.pre },
+  { id: "m4", from: "Schichtleitung Frischwerk, 15:05", title: "Dunkelflaute ab Mittwoch",
+    body: "Die Preise sollen Mittwoch und Donnerstag abends über 300 €/MWh gehen. Was machen wir mit der Kälte? Bitte einen Fahrplan in drei Sätzen.",
+    target: "Szenario Dunkelflaute, ≥ 2,5 % Kostensenkung, Kühlkette sicher, Empfehlung geschrieben.",
+    text: true,
+    check: () => P.scn === "dunkelflaute" && (base.annual - opt.annual) / base.annual >= 0.025 && opt.tmin >= 1.99 && opt.tmax <= 6.01 && answers.m4.trim().split(/[.!?]+\s*/).filter(x => x.length > 8).length >= 3 }
+];
+const done = new Set(); let touched = false;
+function renderMissions() {
+  $("missions").innerHTML = M.map(m => `
+    <article class="mail" id="${m.id}">
+      <div class="from">${m.from}</div>
+      <h3>${m.title}</h3>
+      <p>${m.body}</p>
+      <p class="target">Ziel: ${m.target}</p>
+      ${m.quiz ? `<fieldset><legend class="hint">Deine Empfehlung an den CFO</legend>
+        <label><input type="radio" name="q3" value="ja"> Kaufen</label>
+        <label><input type="radio" name="q3" value="nein"> Nicht kaufen</label></fieldset>` : ""}
+      ${m.text ? `<label class="hint" for="t4">Fahrplan-Empfehlung an die Schichtleitung</label><textarea id="t4" placeholder="Was passiert wann mit der Kälte und warum?"></textarea>` : ""}
+      <div class="actions"><span class="status" id="${m.id}s">Offen</span></div>
+      <div class="feedback" id="${m.id}f"></div>
+    </article>`).join("");
+  document.querySelectorAll('input[name="q3"]').forEach(r => r.addEventListener("change", e => { answers.m3 = e.target.value; checkMissions(); }));
+  $("t4").addEventListener("input", e => { answers.m4 = e.target.value; checkMissions(); });
+}
+function checkMissions() {
+  if (!opt || !$("m1")) return;
+  for (const m of M) {
+    const ok = touched && m.check(); if (ok) done.add(m.id);
+    const el = $(m.id), isDone = done.has(m.id);
+    el.classList.toggle("done", isDone); $(m.id + "s").textContent = isDone ? "Erledigt" : "Offen";
+    let fb = "";
+    if (m.id === "m3" && answers.m3 === "ja") fb = "Prüf den Mehrwert nochmal: Die Vorkühlung kappt den Peak schon. Was bleibt für die Batterie übrig?";
+    if (m.id === "m3" && isDone) fb = "Richtig. Gegenüber der Vorkühlung bringt die Batterie zu wenig. Erst zusätzliche Erlöse aus Flex-Vermarktung könnten den Case drehen.";
+    if (m.id === "m1" && isDone) fb = "Hebel: Kälte vor Schichtbeginn vorfahren, damit Anfahren der Abfüllung und Kältebedarf nicht zusammenfallen.";
+    $(m.id + "f").textContent = fb;
+  }
+  $("prog").textContent = `${done.size} von ${M.length} Aufgaben erledigt`;
+}
+
+// ---------- Events ----------
+["scn", "pre", "band", "bat", "pv", "dc"].forEach(id => $(id).addEventListener("input", () => { touched = true; recompute(); }));
+$("reset").addEventListener("click", () => { write(DEF); recompute(); });
+$("hour").addEventListener("input", drawHour);
+$("playBtn").addEventListener("click", () => {
+  if (playT) { clearInterval(playT); playT = null; $("playBtn").textContent = "Woche abspielen"; return; }
+  $("playBtn").textContent = "Pause";
+  playT = setInterval(() => { const h = $("hour"); h.value = (+h.value + 1) % H; drawHour(); }, 140);
+});
+const tabs = [["t1", "tabTwin"], ["t2", "tabDay"]];
+tabs.forEach(([b, p]) => $(b).addEventListener("click", () => tabs.forEach(([b2, p2]) => { $(b2).setAttribute("aria-selected", b2 === b); $(p2).hidden = b2 !== b; })));
+$("themeBtn").addEventListener("click", () => {
+  const root = document.documentElement, dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark"; try { localStorage.setItem("fw-theme", root.dataset.theme); } catch (e) {}
+  draw();
+});
+try { const th = localStorage.getItem("fw-theme"); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
+
+renderMissions(); write(DEF); recompute();
+})();
+</script>
+</body>
+</html>
