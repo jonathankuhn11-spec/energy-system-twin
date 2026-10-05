@@ -55,7 +55,8 @@ def test_store_upserts_are_idempotent(store, prices, weather):
 
 def test_window_is_built_on_the_hour_and_prices_are_filled_by_persistence(store):
     start = pd.Timestamp("2026-10-06 14:00", tz="Europe/Berlin")
-    series, idx, filled = build_window(store, Site(), start, hours=48)
+    series, idx, filled, method = build_window(store, Site(), start, hours=48)
+    assert method == "persistenz"                       # zwei Tage Historie: zu wenig für das Modell
     assert series.n == 48 and idx[0] == start
     assert filled > 0                                   # Preise reichen nur bis 06.10. 23:45
     assert series.pv.max() > 0 and series.pv.max() <= Site().pv_kwp

@@ -20,6 +20,13 @@
       "lastspitze_status_quo_kw": 1923,
       "lastspitze_optimiert_kw": 1372,
       "einsparung_eur_a": 110052
+    },
+    {
+      "horizont": "Jahr (365 Tage), stündlich, mit Jahresgang",
+      "schritte": 8760,
+      "lastspitze_status_quo_kw": 2036,
+      "lastspitze_optimiert_kw": 1517,
+      "einsparung_eur_a": 111514
     }
   ],
   "kalibrierung": {

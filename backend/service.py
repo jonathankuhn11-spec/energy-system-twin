@@ -3,7 +3,8 @@
 Prozesslast und Kältebedarf kommen aus dem Standortprofil (twin.site), bis Messdaten angebunden
 sind. PV wird aus der Globalstrahlung abgeleitet: P = P_peak · GHI/1000 · Performance-Ratio.
 Fehlen Preise für den hinteren Teil des Fensters (Day-Ahead reicht bis Ende des Folgetags),
-wird mit Persistenz (Vortagspreis) aufgefüllt.
+füllt das Prognosemodell (backend/forecast_model.py) auf, sobald mindestens 14 Tage Historie
+gespeichert sind und es im Backtest die Persistenz schlägt; sonst Persistenz (Vortagspreis).
 """
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -13,6 +14,7 @@ import pandas as pd
 
 from twin.optimize import optimize
 from twin.site import Series, Site, ambient_profile, cooling_demand, process_profile
+from . import forecast_model
 from .store import Store
 
 PERFORMANCE_RATIO = 0.85
@@ -27,11 +29,12 @@ class CycleResult:
     peak_kw: float
     energy_cost_eur: float
     filled_price_steps: int
+    fill_method: str
     schedule: pd.DataFrame
 
 
 def build_window(store: Store, site: Site, start: pd.Timestamp, hours: float = 48.0, dt_h: float = 1.0):
-    """Zeitreihen des Fensters aus dem Speicher; Rückgabe: (Series, Zeitindex, aufgefüllte Preisschritte)."""
+    """Zeitreihen des Fensters aus dem Speicher; Rückgabe: (Series, Zeitindex, aufgefüllte Preisschritte, Methode)."""
     idx = pd.date_range(start, periods=int(round(hours / dt_h)), freq=f"{int(dt_h * 60)}min", tz=TZ)
     prices = store.prices(start - timedelta(days=1), idx[-1] + timedelta(hours=1))
     if prices.empty:
@@ -39,9 +42,19 @@ def build_window(store: Store, site: Site, start: pd.Timestamp, hours: float = 4
     on_grid = lambda target: prices.reindex(prices.index.union(target)).interpolate(limit_area="inside").reindex(target)
     price = on_grid(idx)
     missing = price.isna()
-    if missing.any():                                         # Persistenz: gleicher Zeitpunkt am Vortag
-        prev = on_grid(idx - timedelta(days=1)).to_numpy()
-        price = pd.Series(np.where(missing, prev, price.to_numpy()), index=idx).ffill().bfill()
+    method = "keine"
+    if missing.any():
+        history = store.prices(end=start)
+        method = "persistenz"
+        filled = pd.Series(on_grid(idx - timedelta(days=1)).to_numpy(), index=idx)
+        if len(history) and history.index[-1] - history.index[0] >= timedelta(days=forecast_model.MIN_HISTORY_DAYS):
+            weather_hist = store.weather()
+            bt = forecast_model.backtest(history, weather_hist)
+            if bt.model_is_better:                            # Modell nur, wenn es im Backtest schlägt
+                model = forecast_model.PriceModel().fit(history, weather_hist, start)
+                filled = pd.Series(model.predict(idx, history, start, weather_hist), index=idx)
+                method = f"modell (Backtest RMSE {bt.rmse_model:.1f} vs. Persistenz {bt.rmse_persistence:.1f} €/MWh)"
+        price = pd.Series(np.where(missing, filled.to_numpy(), price.to_numpy()), index=idx).ffill().bfill()
     weather = store.weather(start - timedelta(hours=2), idx[-1] + timedelta(hours=2))
     if weather.empty:
         raise ValueError("Kein Wetter im Speicher: erst Ingestion ausführen")
@@ -53,7 +66,7 @@ def build_window(store: Store, site: Site, start: pd.Timestamp, hours: float = 4
     hod, dow = (idx.hour + idx.minute / 60).to_numpy(), idx.dayofweek.to_numpy()
     series = Series(price.to_numpy(dtype=float), pv, process_profile(site, hod, dow), cooling_demand(site, t_amb, hod, dow),
                     t_amb, dt_h)
-    return series, idx, int(missing.sum())
+    return series, idx, int(missing.sum()), method
 
 
 def run_cycle(store: Store, site: Site, now: datetime | None = None, hours: float = 48.0, dt_h: float = 1.0,
@@ -62,7 +75,7 @@ def run_cycle(store: Store, site: Site, now: datetime | None = None, hours: floa
     now = pd.Timestamp(now or datetime.now()).tz_localize(TZ) if (now is None or pd.Timestamp(now).tzinfo is None) \
         else pd.Timestamp(now).tz_convert(TZ)
     start = now.ceil("h")
-    series, idx, filled = build_window(store, site, start, hours, dt_h)
+    series, idx, filled, method = build_window(store, site, start, hours, dt_h)
     last = store.last_run()
     t0 = site.t_ref
     e0 = 0.5 * site.battery_kwh if site.battery_kwh else 0.0
@@ -78,4 +91,4 @@ def run_cycle(store: Store, site: Site, now: datetime | None = None, hours: floa
     run_id = store.save_run(start, schedule, dt_h, r.peak_kw, r.energy_cost_eur,
                             float(r.temperature_path[min(applied, len(idx))]),
                             float(r.soc_path[min(applied, len(idx))]), note=note)
-    return CycleResult(run_id, start, len(idx), r.peak_kw, r.energy_cost_eur, filled, schedule)
+    return CycleResult(run_id, start, len(idx), r.peak_kw, r.energy_cost_eur, filled, method, schedule)

@@ -30,7 +30,8 @@ def main(argv=None):
     # 1. Auflösung und Horizont
     rows = []
     for label, kw in (("Woche, stündlich", {}), ("Woche, viertelstündlich", {"dt_h": 0.25}),
-                      ("Monat (30 Tage), stündlich", {"days": 30})):
+                      ("Monat (30 Tage), stündlich", {"days": 30}),
+                      ("Jahr (365 Tage), stündlich, mit Jahresgang", {"days": 365, "seasonal": True})):
         s = make_series(site, **kw)
         base, opt = baseline(site, s), optimize(site, s)
         rows.append({"horizont": label, "schritte": s.n, "lastspitze_status_quo_kw": round(base.peak_kw),

@@ -70,7 +70,7 @@ def create_app(store: Store, site: Site | None = None, scheduler: bool = False) 
             raise HTTPException(409, str(e))
         return {"run_id": r.run_id, "window_start": r.window_start.isoformat(), "steps": r.steps,
                 "peak_kw": round(r.peak_kw, 1), "energy_cost_eur": round(r.energy_cost_eur, 2),
-                "filled_price_steps": r.filled_price_steps}
+                "filled_price_steps": r.filled_price_steps, "fill_method": r.fill_method}
 
     @app.get("/schedule")
     def schedule():

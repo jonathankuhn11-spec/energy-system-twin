@@ -35,6 +35,19 @@ def test_monthly_horizon_prices_the_monthly_peak():
     assert 80_000 < savings < 140_000                       # gleiche Größenordnung wie die Wochenrechnung
 
 
+def test_annual_horizon_prices_the_annual_peak():
+    s = make_series(SITE, days=365, seasonal=True)
+    assert s.n == 8760
+    assert s.t_amb.min() < 2 and s.t_amb.max() > 24                      # Jahresgang vorhanden
+    assert s.pv[:24 * 30].sum() < 0.5 * s.pv[24 * 170:24 * 200].sum()     # Januar deutlich unter Juli
+    base, opt = baseline(SITE, s), optimize(SITE, s)
+    assert opt.peak_kw < base.peak_kw and opt.peak_kw == pytest.approx(opt.grid_import.max())
+    assert opt.temperature.min() >= SITE.t_min - 1e-6 and opt.temperature.max() <= SITE.t_max + 1e-6
+    assert annual_savings(SITE, base, opt, s) > 80_000
+    week = make_series(SITE)                                             # Standardwoche bleibt unverändert
+    assert optimize(SITE, week).peak_kw == pytest.approx(1355.2, abs=0.5)
+
+
 def test_window_mode_respects_start_and_terminal_state():
     s = make_series(replace(SITE, battery_kwh=1000))
     site = replace(SITE, battery_kwh=1000)

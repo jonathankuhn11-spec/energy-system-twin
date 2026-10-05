@@ -56,6 +56,11 @@ Monatsspitze statt der Wochenspitze. Die Aussage bleibt stabil:
 | Woche, stündlich | 168 | 1.879 → 1.355 kW | 106 k€ |
 | Woche, viertelstündlich | 672 | 1.845 → 1.368 kW | 104 k€ |
 | Monat (30 Tage), stündlich | 720 | 1.923 → 1.372 kW | 110 k€ |
+| Jahr (365 Tage), stündlich, mit Jahresgang | 8.760 | 2.036 → 1.517 kW | 112 k€ |
+
+Der Jahreshorizont preist die Jahresspitze, so wie der Netzbetreiber sie abrechnet, und braucht einen Jahresgang
+in Preis, PV und Außentemperatur (`make_series(..., seasonal=True)`); HiGHS löst die 61.000 Variablen in
+rund einer Sekunde.
 
 **Kalibrierung aus Messdaten.** `twin/calibrate.py` schätzt die fünf Parameter des Kühlhaus-Modells
 (thermische Kapazität, Mehr-Wärmeeintrag, Grundlast, Außentemperatur-Anteil, Schichtzuschlag) aus
@@ -74,6 +79,16 @@ Kapazität systematisch unterschätzt. Auf einer simulierten Messwoche mit 0,1 K
 Die Nachsimulation mit den geschätzten Parametern trifft die gemessene Temperatur auf 0,11 K. Voraussetzung ist,
 dass sich die Temperatur im Datensatz bewegt: Aus einer Thermostatwoche bei konstant 4 °C lässt sich die
 Kapazität nicht identifizieren, das meldet die Funktion statt eines Zufallswerts.
+
+**Preisprognose aus Daten.** `backend/forecast_model.py` ersetzt die Persistenz durch ein Modell, das aus der
+gespeicherten Preishistorie lernt: Ridge-Regression auf Kalenderindikatoren (Stunde, Wochentag), Preis-Lags
+(24 h bzw. 48 h für den zweiten Prognosetag, 168 h), dem Preisniveau der letzten 24 Stunden und der
+Wetterprognose (Temperatur, Globalstrahlung). Vor jedem Einsatz läuft ein Walk-Forward-Backtest über die
+Historie: An jedem Tag um 13:00 Uhr wird nur mit den bis dahin bekannten Daten trainiert und 48 Stunden
+prognostiziert. Nur wenn das Modell dort die Persistenz schlägt, füllt es das Fenster; sonst bleibt die
+Persistenz. Auf synthetischer Historie mit Wetterabhängigkeit liegt der Backtest-Fehler des Modells deutlich
+unter dem der Persistenz; der Wert auf echten Preisen entsteht erst, wenn die Plattform einige Wochen Historie
+gesammelt hat, und steht dann in der Antwort von `POST /run` (`fill_method`).
 
 **Unsicherheit und rollierende Optimierung.** `twin/rolling.py` optimiert wie im Betrieb: jeden Tag ein
 48-Stunden-Fenster gegen die Preisprognose, nur der erste Tag wird umgesetzt, der erreichte Zustand wandert ins
@@ -113,7 +128,8 @@ flowchart LR
 | --- | --- |
 | `ingest.py` | Day-Ahead-Preise (Energy-Charts, Fraunhofer ISE, CC BY 4.0) und Wetter (Open-Meteo) abrufen; Parser getrennt vom HTTP-Aufruf, kommen mit 15-Minuten-Produkten und Zeitzonen zurecht |
 | `store.py` | DuckDB-Zeitreihenspeicher: eine Datei, kein Server, idempotente Upserts |
-| `service.py` | 48-h-Fenster ab der nächsten vollen Stunde: PV aus Globalstrahlung, Prozess und Kältebedarf aus dem Standortprofil, fehlende Preise per Persistenz, Startzustand aus dem letzten Lauf |
+| `service.py` | 48-h-Fenster ab der nächsten vollen Stunde: PV aus Globalstrahlung, Prozess und Kältebedarf aus dem Standortprofil, fehlende Preise per Prognosemodell oder Persistenz, Startzustand aus dem letzten Lauf |
+| `forecast_model.py` | Preisprognose: Ridge-Regression auf Kalender, Lags, Niveau und Wetter; Walk-Forward-Backtest gegen Persistenz |
 | `api.py` | REST-API, siehe Tabelle unten |
 | `scheduler.py` | täglicher Lauf um 13:30 Uhr, wenn die Preise des Folgetags vorliegen; läuft als Thread im API-Prozess, weil DuckDB einen Schreiber hat |
 | `Dockerfile`, `docker-compose.yml` | ein Container, Datenbank im Volume `./data` |
@@ -122,7 +138,7 @@ flowchart LR
 | --- | --- |
 | `GET /health` | Status, Datenabdeckung, letzter Lauf, Attribution |
 | `POST /ingest` | Preise und Wetter abrufen und speichern (502 bei Netzfehler) |
-| `POST /run` | Optimierungszyklus ausführen: Lauf-ID, Spitze, Arbeitskosten, aufgefüllte Preisschritte (409 ohne Daten) |
+| `POST /run` | Optimierungszyklus ausführen: Lauf-ID, Spitze, Arbeitskosten, aufgefüllte Preisschritte und Prognosemethode (409 ohne Daten) |
 | `GET /schedule` | Fahrplan des letzten Laufs: Preis, PV, Prozess, Kälte, Batterie, Temperatur, Netz je Stunde |
 | `GET /prices`, `GET /weather` | Rohdaten aus dem Speicher |
 
@@ -218,11 +234,12 @@ macOS und Linux: statt der vierten Zeile `source .venv/bin/activate`.
 | Tests | `python -m pytest -q` |
 | Web-Demo lokal | `docs/index.html` im Browser öffnen |
 
-Die 33 Tests prüfen die Physik des Modells (Energiebilanz in jedem Schritt, Temperaturband, zyklische Batterie,
+Die 37 Tests prüfen die Physik des Modells (Energiebilanz in jedem Schritt, Temperaturband, zyklische Batterie,
 Anlagengrenzen, Fensterbetrieb mit Start- und Endzustand), die Ökonomie (Vorkühlung senkt Spitze und Kosten,
 Batterie bringt wenig dazu, Prognosefehler kosten in der richtigen Reihenfolge), die Kalibrierung (Parameter
 auf wenige Prozent, Nicht-Identifizierbarkeit wird erkannt), die Datenbereinigung (Sprung an der richtigen
-Stelle, Faktor auf 1 % genau, Lücken gefüllt, Abweichung unter 0,5 %) und die Plattform (Parser, Speicher,
+Stelle, Faktor auf 1 % genau, Lücken gefüllt, Abweichung unter 0,5 %), die Preisprognose (schlägt die
+Persistenz im Backtest, der Zyklus schaltet erst mit genug Historie um) und die Plattform (Parser, Speicher,
 Zyklus mit Zustandsübergabe, API Ende-zu-Ende).
 
 ## Projektstruktur
@@ -235,20 +252,20 @@ twin/
   forecast.py        Preisprognosen: Persistenz, verrauscht
   rolling.py         Rollierende 48-h-Optimierung mit Zustandsübergabe, Bewertung mit wahren Preisen
   data_quality.py    Lastgang-Bereinigung: Change-Point-Erkennung, Niveaukorrektur, Lücken
-backend/             Ingestion, DuckDB-Speicher, Zyklus, FastAPI, Scheduler, Dockerfile
+backend/             Ingestion, DuckDB-Speicher, Preisprognose, Zyklus, FastAPI, Scheduler, Dockerfile
 run.py               Szenarien, Batterie-Dimensionierung, Report, Fahrplan, Abbildung
 run_extended.py      Auflösung und Horizont, Kalibrierung, Unsicherheit
 docs/index.html      Web-Demo (GitHub Pages)
-tests/               33 Tests, Plattform-Tests gegen aufgezeichnete API-Strukturen in tests/fixtures/
+tests/               37 Tests, Plattform-Tests gegen aufgezeichnete API-Strukturen in tests/fixtures/
 results/             Report, Fahrplan, Abbildung, Erweiterungen; Dunkelflaute in results/dunkelflaute/
 ```
 
 ## Grenzen
 
-- **Jahresspitze.** Der Leistungspreis fällt real auf die höchste Viertelstunde des Jahres; hier steht die
-  Wochen- oder Monatsspitze stellvertretend. Ein Jahreshorizont ist mit dem LP möglich, braucht aber Jahresdaten.
-- **Prognosen sind Platzhalter.** Persistenz und verrauschte wahre Preise zeigen die Sensitivität; eine echte
-  Preisprognose (Wetter, Last, Marktdaten) ist nicht enthalten. PV- und Lastprognosen gelten im MPC als bekannt.
+- **Jahresgang synthetisch.** Der Jahreshorizont rechnet mit einem modellierten Jahresgang; echte Jahresdaten
+  liefert erst die Plattform nach einem Jahr Betrieb.
+- **Prognose linear.** Das Preismodell ist eine Ridge-Regression; Gasmarkt, Residuallast und Kraftwerksausfälle
+  sieht es nicht. PV- und Lastprognosen gelten im MPC als bekannt.
 - **Prozessdaten synthetisch.** Die Plattform leitet PV aus der Strahlung ab, Prozesslast und Kältebedarf aber
   aus dem Standortprofil, bis Sub-Metering angebunden ist.
 - **Konstanter COP.** Real hängt die Leistungszahl von Außen- und Verdampfungstemperatur ab.
@@ -262,7 +279,7 @@ results/             Report, Fahrplan, Abbildung, Erweiterungen; Dunkelflaute in
 ## Nächste Schritte
 
 1. Sub-Metering anbinden und das Kühlhaus-Modell aus echten Messdaten kalibrieren
-2. Preisprognose aus Wetter- und Marktdaten statt Persistenz
+2. Preisprognose mit Residuallast- und Gaspreisfeatures (Gradient Boosting) und Prognoseintervallen
 3. Mindestlaufzeiten und Schaltverluste der Kälteanlage als gemischt-ganzzahliges Programm
 4. Flex-Vermarktung (Intraday, Regelenergie) als zusätzliche Erlösquelle im Batterie-Business-Case
 

@@ -89,15 +89,27 @@ def ambient_profile(hod):
     return 14 + 6 * np.sin((hod - 9) / 24 * 2 * np.pi)
 
 
-def make_series(site: Site, scenario: str = "normal", seed: int = 7, days: int = 7, dt_h: float = 1.0) -> Series:
+def season(day_of_year):
+    """Jahresgang: 0 im Winter, 1 im Hochsommer (Minimum Mitte Januar, Maximum Mitte Juli)."""
+    return (1 - np.cos(2 * np.pi * (np.asarray(day_of_year) - 15) / 365)) / 2
+
+
+def make_series(site: Site, scenario: str = "normal", seed: int = 7, days: int = 7, dt_h: float = 1.0,
+                seasonal: bool = False) -> Series:
+    """Synthetische Zeitreihen. seasonal=True legt einen Jahresgang über Preis, PV und Außentemperatur
+    (für Jahreshorizonte); ohne Jahresgang entspricht jeder Tag einer Herbstwoche."""
     rng = np.random.default_rng(seed)
     n, hod, dow = time_grid(days, dt_h)
+    doy = ((np.arange(n) * dt_h) // 24).astype(int) % 365
+    sea = season(doy) if seasonal else None
 
     # Day-Ahead-Preis: Morgen-/Abendspitze, Solartal mittags
     shape = (18 * np.exp(-((hod - 8) ** 2) / 6) + 30 * np.exp(-((hod - 19) ** 2) / 5)
              - 35 * np.exp(-((hod - 13) ** 2) / 8))
     weekend = np.where(dow >= 5, -15, 0)
     price = 95 + shape + weekend + rng.normal(0, 6, n)
+    if seasonal:
+        price = price + 20 * (0.5 - sea)                      # Winter teurer, Sommer billiger
     if scenario == "dunkelflaute":
         price = price * 1.6 + 40
         price[np.isin(dow, (2, 3)) & (hod >= 17) & (hod < 21)] += 190   # Mi/Do Abendspitzen > 300 €/MWh
@@ -109,8 +121,12 @@ def make_series(site: Site, scenario: str = "normal", seed: int = 7, days: int =
     bell = np.clip(np.sin((hod - 6) / 14 * np.pi), 0, None) ** 1.5
     day_index = ((np.arange(n) * dt_h) // 24).astype(int)
     pv = site.pv_kwp * 0.72 * bell * cloud[day_index]
+    if seasonal:
+        pv = pv * (0.35 + 0.65 * sea)                         # kürzere Tage, flacher Sonnenstand im Winter
 
     process = process_profile(site, hod, dow, rng)
     t_amb = ambient_profile(hod)
+    if seasonal:
+        t_amb = t_amb - 11 + 20 * sea                         # Jahresmittel um 14 °C, Winter 0–6, Sommer 18–24
     cooling_th = cooling_demand(site, t_amb, hod, dow)
     return Series(price, pv, process, cooling_th, t_amb, dt_h)
